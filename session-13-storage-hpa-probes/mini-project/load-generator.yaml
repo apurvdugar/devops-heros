@@ -1,0 +1,16 @@
+# Load Generator Pod for the mini-project
+# Sends continuous HTTP requests to web-service in the production-webapp namespace
+apiVersion: v1
+kind: Pod
+metadata:
+  name: load-generator
+  namespace: production-webapp
+spec:
+  containers:
+    - name: load
+      image: busybox:1.36
+      command:
+        - /bin/sh
+        - -c
+        - "while true; do wget -q -O- http://web-service; done"
+  restartPolicy: Never
