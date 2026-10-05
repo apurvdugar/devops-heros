@@ -16,6 +16,9 @@ jobs:
   test:
     name: Test Application (CI)
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: assignments/session-16
     steps:
       - name: Checkout Source Code
         uses: actions/checkout@v4
@@ -25,6 +28,7 @@ jobs:
         with:
           python-version: "3.12"
           cache: "pip"
+          cache-dependency-path: assignments/session-16/requirements.txt
 
       - name: Install Dependencies
         run: |
@@ -41,6 +45,9 @@ jobs:
   security-check:
     name: Security & Secret Scan (CI)
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: assignments/session-16
     steps:
       - name: Checkout Source Code
         uses: actions/checkout@v4
@@ -62,6 +69,9 @@ jobs:
     name: Build & Package (CI)
     needs: [test, security-check]
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: assignments/session-16
     steps:
       - name: Checkout Source Code
         uses: actions/checkout@v4
@@ -75,7 +85,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: calculator-build
-          path: build/
+          path: assignments/session-16/build/
           retention-days: 7
 
   # =========================================================================
@@ -86,6 +96,9 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main'
+    defaults:
+      run:
+        working-directory: assignments/session-16
     steps:
       - name: Checkout Source Code
         uses: actions/checkout@v4
