@@ -15,10 +15,6 @@ on:
   workflow_dispatch:
 
 jobs:
-  # =========================================================================
-  # Complete End-to-End CI/CD Pipeline (Single Runner Execution)
-  # Executes all stages sequentially on one runner to bypass multi-VM queues
-  # =========================================================================
   pipeline:
     name: CI/CD Automated Pipeline
     runs-on: ubuntu-latest
@@ -26,25 +22,25 @@ jobs:
       run:
         working-directory: assignments/session-16
     steps:
-      - name: 1. Checkout Source Code
+      - name: "1. Checkout Source Code"
         uses: actions/checkout@v4
 
-      - name: 2. Set up Python 3.12
+      - name: "2. Set up Python 3.12"
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
 
-      - name: 3. Install Dependencies
+      - name: "3. Install Dependencies"
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: 4. Run Pytest Suite (CI: Test)
+      - name: "4. Run Pytest Suite"
         run: |
           echo "Running automated unit tests..."
           pytest -v --tb=short
 
-      - name: 5. Security & Secrets Audit (CI: Security)
+      - name: "5. Security and Secrets Audit"
         run: |
           echo "Scanning repository for leaked credentials or environment files..."
           if find . -type f \( -name ".env" -o -name "*.pem" -o -name "*.key" \) | grep -q .; then
@@ -54,30 +50,30 @@ jobs:
             echo "No common sensitive files found. Security check passed."
           fi
 
-      - name: 6. Build Application Package (CI: Build)
+      - name: "6. Build Application Package"
         run: |
           echo "Executing application build script..."
           chmod +x build.sh
           ./build.sh
 
-      - name: 7. Upload Build Artifact
+      - name: "7. Upload Build Artifact"
         uses: actions/upload-artifact@v4
         with:
           name: calculator-build
           path: assignments/session-16/build/
           retention-days: 7
 
-      - name: 8. Build Docker Container (CD: Package)
+      - name: "8. Build Docker Container"
         run: |
           echo "Building container image from Dockerfile..."
           docker build -t session16-calculator:latest .
 
-      - name: 9. Test Docker Container (CD: Smoke Test)
+      - name: "9. Test Docker Container Execution"
         run: |
           echo "Running smoke test on container image..."
           docker run --rm session16-calculator:latest python -c "from app.calculator import add; print('Smoke Test Passed: 2 + 3 =', add(2, 3))"
 
-      - name: 10. Deploy to Production (CD: Deploy)
+      - name: "10. Deploy to Production"
         if: github.ref == 'refs/heads/main'
         env:
           DEPLOY_ENVIRONMENT: production
