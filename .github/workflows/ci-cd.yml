@@ -1,0 +1,115 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  # =========================================================================
+  # 1. CI STAGE: Automated Testing
+  # =========================================================================
+  test:
+    name: Test Application (CI)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run Pytest Suite
+        run: |
+          pytest -v --tb=short
+
+  # =========================================================================
+  # 2. CI STAGE: Security & Secrets Audit
+  # =========================================================================
+  security-check:
+    name: Security & Secret Scan (CI)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+
+      - name: Audit for Exposed Sensitive Files
+        run: |
+          echo "Scanning repository for leaked credentials or environment files..."
+          if find . -type f \( -name ".env" -o -name "*.pem" -o -name "*.key" \) | grep -q .; then
+            echo "::error::Sensitive files detected in repository!"
+            exit 1
+          else
+            echo "No common sensitive files found. Security check passed."
+          fi
+
+  # =========================================================================
+  # 3. CI STAGE: Build & Package Artifacts
+  # =========================================================================
+  build:
+    name: Build & Package (CI)
+    needs: [test, security-check]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+
+      - name: Execute Build Script
+        run: |
+          chmod +x build.sh
+          ./build.sh
+
+      - name: Upload Build Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: calculator-build
+          path: build/
+          retention-days: 7
+
+  # =========================================================================
+  # 4. CD STAGE: Containerization & Simulated Deployment
+  # =========================================================================
+  deploy:
+    name: Containerize & Deploy (CD)
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Docker Container
+        run: |
+          echo "Building container image from Dockerfile..."
+          docker build -t session16-calculator:latest .
+
+      - name: Test Docker Container Execution
+        run: |
+          echo "Running smoke test on container image..."
+          docker run --rm session16-calculator:latest python -c "from app.calculator import add; print('Smoke Test Passed: 2 + 3 =', add(2, 3))"
+
+      - name: Deploy to Environment (Simulated CD)
+        env:
+          DEPLOY_ENVIRONMENT: production
+          DEPLOY_TOKEN: ${{ secrets.DEPLOY_TOKEN || 'simulated-secure-token' }}
+        run: |
+          echo "=================================================="
+          echo "Deploying to Environment: $DEPLOY_ENVIRONMENT"
+          echo "Container Image Tag: session16-calculator:latest"
+          echo "Deployment Status: SUCCESSFUL"
+          echo "=================================================="
