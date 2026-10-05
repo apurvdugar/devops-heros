@@ -1,0 +1,336 @@
+name: Python DevSecOps Pipeline
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'session-17-devsecops/demo/**'
+      - '.github/workflows/devsecops.yml'
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'session-17-devsecops/demo/**'
+  workflow_dispatch:
+
+jobs:
+
+  # ========================================
+  # STEP 1 — Application Build & Packaging (CI)
+  # ========================================
+
+  build:
+    name: Application Build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: session-17-devsecops/demo
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Validate and Package Application
+        run: |
+          echo "Compiling Python source code to verify syntax..."
+          python -m compileall app/
+          mkdir -p build
+          tar -czf build/app.tar.gz app/ requirements.txt
+          echo "Application build successfully verified."
+
+  # ========================================
+  # STEP 2 — Run Unit Tests (CI)
+  # ========================================
+
+  test:
+    name: Unit Tests
+    needs: build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: session-17-devsecops/demo
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements-dev.txt
+
+      - name: Run tests
+        run: |
+          pytest --cov=app --cov-report=term-missing
+
+  # ========================================
+  # STEP 3 — SAST (Static Code Security Scan)
+  # ========================================
+
+  sast:
+    name: SAST - CodeQL
+    needs: test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: python
+
+      - name: Analyze code
+        uses: github/codeql-action/analyze@v3
+
+  # ========================================
+  # STEP 4 — SCA (Check for vulnerable packages)
+  # ========================================
+
+  sca:
+    name: SCA - Dependency Scan
+    needs: sast
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: session-17-devsecops/demo
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install pip-audit
+
+      - name: Run dependency scan
+        run: |
+          pip-audit
+
+  # ========================================
+  # STEP 5 — Secret Scanning (DevSecOps)
+  # ========================================
+
+  secret-scan:
+    name: Secret & Credential Scan
+    needs: sca
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: session-17-devsecops/demo
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Scan for leaked secrets & credentials
+        run: |
+          echo "Scanning repository for leaked credentials or environment files..."
+          if find . -type f \( -name ".env*" -o -name "*.pem" -o -name "*.key" \) | grep -q .; then
+            echo "::error::Sensitive files detected in repository!"
+            exit 1
+          fi
+          echo "No exposed credentials detected. Secret scan passed."
+
+  # ========================================
+  # STEP 6 — Build Docker Image (CI)
+  # ========================================
+
+  docker-build:
+    name: Docker Build
+    needs: secret-scan
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: session-17-devsecops/demo
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Build Docker image
+        run: |
+          docker build -t apurvdugar/hey-cicd:${{ github.sha }} .
+          mkdir -p /tmp/docker-cache
+          docker save apurvdugar/hey-cicd:${{ github.sha }} -o /tmp/docker-cache/image.tar
+
+      - name: Cache Docker image
+        uses: actions/upload-artifact@v4
+        with:
+          name: docker-image
+          path: /tmp/docker-cache/image.tar
+          retention-days: 1
+
+  # ========================================
+  # STEP 7 — Scan Docker Image (Trivy)
+  # ========================================
+
+  image-scan:
+    name: Image Scan - Trivy
+    needs: docker-build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: session-17-devsecops/demo
+
+    steps:
+      - name: Download cached image
+        uses: actions/download-artifact@v4
+        with:
+          name: docker-image
+          path: /tmp/docker-cache
+
+      - name: Load Docker image
+        run: |
+          docker load -i /tmp/docker-cache/image.tar
+
+      - name: Install Trivy
+        run: |
+          sudo apt-get install -y wget
+          wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key \
+            | sudo gpg --dearmor -o /usr/share/keyrings/trivy.gpg
+          echo "deb [signed-by=/usr/share/keyrings/trivy.gpg] https://aquasecurity.github.io/trivy-repo/deb generic main" \
+            | sudo tee /etc/apt/sources.list.d/trivy.list
+          sudo apt-get update && sudo apt-get install -y trivy
+
+      - name: Scan image
+        run: |
+          trivy image --severity HIGH,CRITICAL apurvdugar/hey-cicd:${{ github.sha }}
+
+  # ========================================
+  # STEP 8 — Security Policy Gate
+  # ========================================
+
+  security-gate:
+    name: Security Gate
+    needs: image-scan
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: session-17-devsecops/demo
+
+    steps:
+      - name: Download cached image
+        uses: actions/download-artifact@v4
+        with:
+          name: docker-image
+          path: /tmp/docker-cache
+
+      - name: Load Docker image
+        run: |
+          docker load -i /tmp/docker-cache/image.tar
+
+      - name: Install Trivy
+        run: |
+          sudo apt-get install -y wget
+          wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key \
+            | sudo gpg --dearmor -o /usr/share/keyrings/trivy.gpg
+          echo "deb [signed-by=/usr/share/keyrings/trivy.gpg] https://aquasecurity.github.io/trivy-repo/deb generic main" \
+            | sudo tee /etc/apt/sources.list.d/trivy.list
+          sudo apt-get update && sudo apt-get install -y trivy
+
+      - name: Enforce Security Policy Gate
+        run: |
+          echo "Enforcing Security Gate: Blocking on CRITICAL vulnerabilities..."
+          trivy image --severity CRITICAL --exit-code 1 apurvdugar/hey-cicd:${{ github.sha }}
+          echo "Security Gate Passed: Image complies with security baseline."
+
+  # ========================================
+  # STEP 9 — Push image to Docker Hub (CD)
+  # ========================================
+
+  push:
+    name: Push Image to Docker Hub
+    needs: security-gate
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    defaults:
+      run:
+        working-directory: session-17-devsecops/demo
+
+    steps:
+      - name: Download cached image
+        uses: actions/download-artifact@v4
+        with:
+          name: docker-image
+          path: /tmp/docker-cache
+
+      - name: Load Docker image
+        run: |
+          docker load -i /tmp/docker-cache/image.tar
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: apurvdugar
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Tag and Push image
+        run: |
+          docker tag apurvdugar/hey-cicd:${{ github.sha }} apurvdugar/hey-cicd:latest
+          docker push apurvdugar/hey-cicd:${{ github.sha }}
+          docker push apurvdugar/hey-cicd:latest
+
+  # ========================================
+  # STEP 10 — Deploy to Kubernetes (CD)
+  # ========================================
+
+  deploy:
+    name: Deploy to Kubernetes
+    needs: push
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    defaults:
+      run:
+        working-directory: session-17-devsecops/demo
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Create k8s Kind Cluster (For testing deployment)
+        uses: helm/kind-action@v1.10.0
+
+      - name: Update deployment with new image tag
+        run: |
+          sed -i "s|__IMAGE_TAG__|${{ github.sha }}|g" k8s/deployment.yaml
+
+      - name: Deploy to Kubernetes
+        run: |
+          kubectl apply -f k8s/deployment.yaml
+          kubectl apply -f k8s/service.yaml
+
+      - name: Check rollout status
+        run: |
+          kubectl rollout status deployment/session17-python --timeout=60s
+
+      - name: Test running website in CI (Curl)
+        run: |
+          kubectl port-forward service/session17-python 5001:80 &
+          sleep 3
+          
+          echo "🌐 Fetching the website HTML..."
+          curl -s http://localhost:5001 | head -n 15
+          
+          echo -e "\n\n🌐 Fetching the API status..."
+          curl -s http://localhost:5001/api/status

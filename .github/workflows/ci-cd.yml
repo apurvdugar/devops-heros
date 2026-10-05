@@ -4,9 +4,14 @@ on:
   push:
     branches:
       - main
+    paths:
+      - 'assignments/session-16/**'
+      - '.github/workflows/ci-cd.yml'
   pull_request:
     branches:
       - main
+    paths:
+      - 'assignments/session-16/**'
   workflow_dispatch:
 
 jobs:
