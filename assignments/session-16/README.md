@@ -6,19 +6,6 @@ This project demonstrates a complete, automated **CI/CD pipeline** built using *
 
 ## 1. Core Concepts: CI vs CD
 
-```text
-┌────────────────────────────────────────────────────────────────────────┐
-│                        CI/CD Pipeline Flow                             │
-├───────────────────────────────────┬────────────────────────────────────┤
-│ Continuous Integration (CI)       │ Continuous Delivery / Deploy (CD)  │
-├───────────────────────────────────┼────────────────────────────────────┤
-│ • Automated linting & unit tests  │ • Container packaging (Docker)     │
-│ • Security scanning (secrets leak)│ • Smoke testing container image    │
-│ • Application build & packaging   │ • Release deployment to targets    │
-│ • Uploading build artifacts       │ • Automated rollout to production  │
-└───────────────────────────────────┴────────────────────────────────────┘
-```
-
 - **Continuous Integration (CI):** Developers commit and merge code frequently to a shared repository. Every push triggers automated builds, unit test suites, and code quality checks to detect integration issues immediately.
 - **Continuous Delivery / Deployment (CD):** Once CI checks pass, the deployment phase automatically packages the validated code into deployable container artifacts and delivers them to staging or production environments.
 
@@ -113,48 +100,7 @@ Runs **only on the `main` branch** after the build completes:
 
 ## 5. Practical Implementation Outputs
 
-1. **GitHub Actions Workflow Trigger & Jobs Graph:**
-
 ![alt text](./screenshots/image.png)
 
 ![alt text](./screenshots/image-1.png)
-
----
-
-2. **Test & Security Check Execution:**
-
-![alt text](./screenshots/image-2.png)
-
-![alt text](./screenshots/image-3.png)
-
----
-
-3. **Build & Artifact Upload:**
-
-![alt text](./screenshots/image-4.png)
-
-![alt text](./screenshots/image-5.png)
-
----
-
-4. **Docker Container Build & Deployment:**
-
-![alt text](./screenshots/image-6.png)
-
-![alt text](./screenshots/image-7.png)
-
----
-
-5. **Failure Scenario (Intentional Bug Stoppage):**
-
-When a test is broken, the `test` job fails, stopping `build` and `deploy` from ever running:
-
-![alt text](./screenshots/image-8.png)
-
----
-
-6. **Fix & Green Pipeline Verification:**
-
-![alt text](./screenshots/image-9.png)
-
 ---
