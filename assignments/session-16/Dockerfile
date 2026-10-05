@@ -28,4 +28,4 @@ ENV PATH=/home/appuser/.local/bin:$PATH \
 USER appuser
 
 # Run application
-ENTRYPOINT ["python", "app/calculator.py"]
+CMD ["python", "app/calculator.py"]

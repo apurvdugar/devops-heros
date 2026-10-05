@@ -44,6 +44,9 @@ if __name__ == "__main__":
                 print(f"Result: {divide(a, b)}")
             else:
                 print(f"Unknown operation: {op}")
+        except (EOFError, KeyboardInterrupt):
+            print("\nExiting.")
+            break
         except ValueError as e:
             print(f"Error: {e}")
         except Exception as e:
