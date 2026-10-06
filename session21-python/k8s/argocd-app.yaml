@@ -1,0 +1,29 @@
+# Apply this file from your local environment to register the app with Argo CD.
+# Do NOT place it under the path that Argo CD watches (helm/taskboard), 
+# as Argo CD would try to render it as a workload manifest.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: taskboard
+  namespace: argocd
+spec:
+  project: default
+
+  source:
+    repoURL: https://github.com/apurvdugar/devops-heros.git
+    targetRevision: main
+    path: session21-python/helm/taskboard
+    helm:
+      valueFiles:
+        - values-dev.yaml
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: taskboard
+
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
